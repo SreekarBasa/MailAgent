@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inbox</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        #status { margin-top: 10px; color: green; }
+        #status.error { color: red; }
+        h1, h2 { color: #333; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>Inbox</h1>
+    <button onclick="checkNewEmails()">Check New Emails</button>
+    <div id="status"></div>
+
+    <h2>High Priority</h2>
+    <ul>
+        {% for email in high %}
+            <li>{{ email.subject }} from {{ email.sender }} ({{ email.date }})</li>
+        {% empty %}
+            <li>No high priority emails.</li>
+        {% endfor %}
+    </ul>
+    <h2>Medium Priority</h2>
+    <ul>
+        {% for email in medium %}
+            <li>{{ email.subject }} from {{ email.sender }} ({{ email.date }})</li>
+        {% empty %}
+            <li>No medium priority emails.</li>
+        {% endfor %}
+    </ul>
+    <h2>Low Priority</h2>
+    <ul>
+        {% for email in low %}
+            <li>{{ email.subject }} from {{ email.sender }} ({{ email.date }})</li>
+        {% empty %}
+            <li>No low priority emails.</li>
+        {% endfor %}
+    </ul>
+
+    <script>
+        async function checkNewEmails() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Checking for new emails...';
+            statusDiv.className = '';
+
+            try {
+                const response = await fetch('/api/check-new-mails', { method: 'GET' });
+                const data = await response.json();
+                if (data.status === 'New unread mails fetched and stored.') {
+                    statusDiv.textContent = data.status;
+                    statusDiv.className = '';
+                    // Optionally reload the page to show new emails
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    statusDiv.textContent = `Error: ${data.error}`;
+                    statusDiv.className = 'error';
+                }
+            } catch (error) {
+                statusDiv.textContent = `Error: Failed to connect to server`;
+                statusDiv.className = 'error';
+            }
+        }
+    </script>
+</body>
+</html>

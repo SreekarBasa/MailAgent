@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classified Emails</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .email-card { transition: all 0.3s ease; }
+        .email-card:hover { background-color: #f3f4f6; }
+        .email-details { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .email-details.show { max-height: 1000px; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <nav class="bg-blue-600 text-white p-4 flex justify-between items-center">
+        <div class="text-xl font-bold">Email Client</div>
+        <div class="space-x-4">
+            <a href="{% url 'inbox' %}" class="hover:underline">Inbox</a>
+            <a href="{% url 'classified' %}" class="hover:underline">Classified</a>
+        </div>
+    </nav>
+
+    <div class="max-w-4xl mx-auto p-4">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold">Classified Emails</h1>
+            <button onclick="checkNewEmails()" class="bg-blue-500 text-white px-4 py-4 rounded hover:bg-blue-600">Check New Emails</button>
+        </div>
+        <div id="status" class="text-green-600 mb-2"></div>
+
+        <h2 class="text-lg font-bold mb-2">High Priority</h2>
+        <div class="mb-4">
+            {% for email in items %}
+            <div class="email-card bg-white rounded shadow mb-2 p-4 cursor-pointer" data-email-id="{{ email.id }}">
+                <div class="flex justify-between">
+                    <div>
+                        <div class="font-bold">{{ email.sender }}</div>
+                        <div class="text-gray-600">{{ email.subject|truncatewords:5 }}</div>
+                        <div class="text-gray-500">{{ email.body|truncatewords:30 }}</div>
+                    </div>
+                    <div class="text-sm text-gray-600">{{ email.date|date:"M d, Y, h:i A" }}</div>
+                </div>
+                <div class="email-details">
+                    <div class="hr class="my-2">
+                    <div class="text-gray-800 whitespace-pre-wrap">{{ email.body }}</div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-gray-500">No high priority emails.</p>
+            {% endfor %}
+        </div>
+
+        <h2 class="text-lg font-bold mb-2">Medium Priority</h2>
+        <div class="mb-4">
+            {% for email in medium %}
+            <h2<div class="email-card bg-white rounded shadow mb-2 p-2 cursor-pointer" data-email-id="{{ email.id }}">
+                <div class="flex justify-between">
+                    <div>
+                        <div class="font-bold">{{ email.sender }}</div>
+                        <div class="text-gray-600">{{ email.subject|truncatewords:5 }}</div>
+                        <div class="text-gray-500">{{ email.body|truncatewords:30 }}</div>
+                    </div>
+                    <div>
+                    <div class="text-sm text-gray-600">{{ email.date|date:"M d, Y, h:i A" }}</div>
+                </div>
+                </div>
+                <div class="email-details">
+                    <hr class="my-2">
+                    <div class="text-gray-800 whitespace-pre-wrap">{{ email.body }}</div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-gray-500">No medium priority emails.</p>
+            {% endfor %}
+        </div>
+
+        <h2 class="text-lg font-bold mb-2">Low Priority</h2>
+        <div>
+            {% for email in low %}
+            <div class="email-card bg-white rounded shadow mb-2 p-4 cursor-pointer" data-email-id="{{ email.id }}">
+                <div class="flex justify-between">
+                    <div>
+                        <div class="font-bold">{{ email.sender }}</div>
+                        <div class="text-gray-600">{{ email.subject|truncatewords:5 }}</div>
+                        <div class="text-gray-500">{{ email.body|truncatewords:30 }}</div>
+                    </div>
+                    <div class="text-sm text-gray-600">{{ email.date|date:"M d, Y, h:i A" }}</div>
+                </div>
+                </div>
+                <div class="email-details">
+                    <div class="my-2">
+                    <hr class="text-gray-800 whitespace-pre-wrap">{{ email.body }}</div>
+                </div>
+            </div>
+            {% empty %}
+            <p class="text-gray-500">No low priority emails.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        // Toggle email details
+        document.querySelectorAll('.email-card').forEach(card => {
+            card.addEventListener('click', async () => {
+                const details = card.querySelector('.email-details');
+                details.classList.toggle('show');
+                if (details.classList.contains('show')) {
+                    const emailId = card.getAttribute('data-email-id');
+                    try {
+                        await fetch(`/mark-read/${emailId}`, { method: 'POST' });
+                    } catch (error) {
+                        console.error('Error marking emails read:', error);
+                    }
+                }
+            });
+        });
+
+        // Manual fetch
+        async function checkNewEmails() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Checking for new emails...';
+            statusDiv.className = 'text-blue-600';
+
+            try {
+                const response = await fetch('/api/check-new-mails', { method: 'GET' });
+                const data = await response.json();
+                if (data.status === 'New unread mails fetched and stored') {
+                    statusDiv.textContent = data.status;
+                    statusDiv.className = 'text-green-600';
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    statusDiv.textContent = `Error: ${data.error}`;
+                    statusDiv.className = 'text-red-600';
+                }
+            } catch (error) {
+                statusDiv.textContent = `Error: Failed to connect to server`;
+                statusDiv.className = 'text-red-600';
+            }
+        }
+
+        // SSE for real-time updates
+        const source = new EventSource('/api/events');
+        source.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.event === 'new_email') {
+                const statusDiv = document.getElementById('status');
+                statusDiv.textContent = data.data;
+                statusDiv.className = 'text-green-600';
+                setTimeout(() => window.location.reload(), 1000);
+            }
+        };
+        source.onerror = function() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Error: Lost connection to server';
+            statusDiv.className = 'text-red-600';
+        };
+    </script>
+</body>
+</html>
+```
+
+**Explanation**:
+- Similar structure to `inbox.html`, but groups emails by priority.
+- Placeholder logic: Emails are grouped by `high`, `medium`, `low`. We can refine this later (e.g., ML-based classification, sender-based, or keyword-based classification).
+- Same navigation, button, and SSE functionality.
+
+#### 7. FastAPI Backend: `fastapi_routes.py`
+Keep the existing `fastapi_routes.py` with a minor tweak to set `read` status for new emails.
+
+```python
+<xaiArtifact artifact_id="1f0a3bd0-9c6d-4462-9d39-78cddb34febf" artifact_version_id="8116f22e-2daf-4e15-93d8-bafdbc312334" title="fastapi_routes.py" contentType="text/python">
+from typing import AsyncGenerator
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from mailapp.models import Email
+import imaplib2
+import email
+from django.utils.timezone import make_aware
+from datetime import datetime
+import logging
+import asyncio
+from starlette.concurrency import run_in_threadpool
+from sse_starlette.sse import EventSourceResponse
+import json
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+fastapi_app =FastAPI()
+
+# Event queue for SSE
+event_queue = asyncio.Queue()
+
+async def fetch_new_emails():
+    logger.info("Fetching new emails...")
+    try:
+        mail = imaplib2.IMAP4_SSL("imap.gmail.com")
+        mail.login("developer.14625@gmail.com", "your-actual-app-password")
+        mail.select("inbox")
+
+        result, data = mail.search(None, "UNSEEN")
+        uid_list = data[0].split()
+
+        for uid in uid_list:
+            result, msg_data = mail.uid('fetch', uid, '(RFC822)')
+            raw = email.message_from_bytes(msg_data[0][1]))
+
+            subject = raw['subject'] or 'subject' ''
+            sender = raw['From'] or ''
+            try:
+                date = make_aware(datetime.strptime(raw['Date'], '%a, %d %b %Y %H:%M:%S %z'))
+            except:
+                date = make_aware(datetime.now())
+
+            body = ''
+            if raw.is_multipart():
+                body for part in raw.walk():
+                    if part.get_content_type() == 'text/plain':
+                        body += part.get_payload(decode=True).decode(errors='ignore').split()
+                    else:
+                        body = raw.get_payload(decode=True).decode(errors='ignore')
+
+            if not Email.objects.filter(uid=uid.decode()).exists():
+                Email.objects.create(
+                    uid=uid.decode(),
+                    sender=sender,
+                    subject=subject,
+                    body=body,
+                    date=date,
+                    priority='low',
+                    read=False  # Set as unread
+                )
+                await event_queue.put({"event": "new_email", "data": f"New email: {subject} from {sender}"})
+
+        mail.logout()
+        logger.info(f"Processed {len(uid_list)} new emails.")
+        return {"status": "New unread mails fetched and stored."}
+    } except Exception as e:
+        logger.error(f"Error fetching emails: {str(e)}")
+        return {"status": "Error fetching emails", "error": str(e)}
+
+@fastapi_app.get("/check-new-mails")
+async def check_new_emails():
+    return await fetch_new_emails()
+
+async def imap_idle_task():
+    while True:
+        try:
+            def idle_callback(args):
+                logger.info("IMAP IDLE: New event detected")
+                asyncio.create_task(fetch_new_emails())
+
+            mail = imaplib2.IMAP4_SSL("imap.gmail.com")
+            mail.login("developer.14625@gmail.com", "your-actual-app-password")
+            mail.select("inbox")
+            mail.idle(callback=idle_callback)
+        except Exception as e:
+            logger.error(f"IMAP IDLE error: {str(e)}")
+            await asyncio.sleep(60)  # Wait before reconnecting
+        finally:
+            try:
+                mail.logout()
+            except:
+                pass
+            await asyncio.sleep(10)
+
+@fastapi_app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(imap_idle_task())
+
+@fastapi_app.get("/events")
+async def sse():
+    async def event_generator():
+        while True:
+            try:
+                event = await event_queue.get()
+                yield {"event": event["event"], "data": json.dumps(event["data"])}
+            except Exception as e:
+                logger.error(f"SSE error: {str(e)}")
+                await asyncio.sleep(1)
+
+    return EventSourceResponse(event_generator())
+```
